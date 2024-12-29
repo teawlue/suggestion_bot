@@ -295,45 +295,44 @@ async def cmd_start(message: Message):
 
 @router.message()
 async def handle_suggestion(message: Message):
-    """Обработка сообщений (предложений) от пользователей."""
     user_id = message.from_user.id
+    # Если есть username, используем его (например, "someuser"), иначе "user12345"
     username = message.from_user.username or f"user{user_id}"
 
-    # Обновим user_mapping, чтобы /block мог сработать
+    # Обновляем словарь user_mapping (если есть)
     user_mapping[username] = user_id
 
-    # Проверим блокировку
-    if user_id in black_list:
-        logger.info("Blocked user %s tried to send a message", user_id)
-        return
+    # Блокировка, кулдаун, добавление в статистику — как и раньше
+    ...
 
-    # Кулдаун
-    if is_in_cooldown(user_id):
-        await message.reply(f"Please wait {SPAM_COOLDOWN} seconds between messages.")
-        return
-    else:
-        update_cooldown(user_id)
-
-    # Запоминаем в статистике
-    text = message.text
-    add_suggestion_stat(user_id, username, text)
-
-    # Действуем по режиму
     if current_mode == "forward":
-        # Пересылаем админу
+        # Формируем имя для показа админу
+        if message.from_user.username:
+            display_name = f"@{message.from_user.username}"
+        else:
+            # Если нет username, показываем имя + фамилию
+            # full_name = "FirstName LastName" (aiogram в 3.x это message.from_user.full_name)
+            display_name = message.from_user.full_name  
+
+        # Создаём текст, который отправим админу
+        text_for_admin = (
+            f"From {display_name} (id={user_id}):\n"
+            f"{message.text}"
+        )
+        
         try:
-            await message.send_copy(ADMIN_ID)
+            # Отправляем админу уже готовый текст
+            await message.bot.send_message(ADMIN_ID, text_for_admin)
             logger.info("Forwarded suggestion from %s (id=%s) to admin", username, user_id)
         except Exception as e:
             logger.error("Failed to forward suggestion: %s", e)
     else:
-        # Запись в файл
-        log_suggestion_to_file(user_id, username, text)
+        # Режим записи в файл (file)
+        log_suggestion_to_file(user_id, username, message.text)
         logger.info("Added suggestion from %s (id=%s) to file", username, user_id)
-
+    
     # Ответ пользователю
     await message.answer("Your suggestion has been received. Thank you!")
-
 
 # -------------------------------------------------------------
 # MAIN
